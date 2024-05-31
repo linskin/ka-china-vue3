@@ -1,0 +1,116 @@
+<script setup lang="ts">
+import {computed, reactive, ref, watch} from "vue";
+import type {Rule} from 'ant-design-vue/es/form';
+import useUser from "@/composables/useUser";
+import {FormInstance, message, notification} from "ant-design-vue";
+
+const {updateUser} = useUser()
+const formRef = ref<FormInstance>();
+const formState = reactive<UserModel.UserUpdateDto>({avatar: "", id: 0, name: ""});
+
+interface IProps {
+    visible: boolean;
+    data: UserModel.UserVo;
+}
+
+// @ts-ignore
+const props = withDefaults(defineProps<IProps>(), {
+    visible: false,
+})
+
+const emit = defineEmits(['onCancel', 'onOk'])
+watch(() => props.data, (val) => {
+    formState.id = val.id || 0;
+    formState.name = val.name || '';
+    formState.avatar = val.avatar || '';
+}, {immediate: true})
+const dialogVisible = computed({
+    get: () => props.visible,
+    set: () => {
+        emit('onCancel')
+    }
+})
+
+let validateUserName = async (_rule: Rule, value: string) => {
+    if (!value) {
+        return Promise.reject('昵称不能为空');
+    }
+    if (value.length < 2 || value.length > 30) {
+        return Promise.reject('昵称长度需在2-30之间');
+    } else {
+        return Promise.resolve();
+    }
+};
+
+let validateUserAccount = async (_rule: Rule, value: string) => {
+    if (!value) {
+        return Promise.reject('手机号不能为空');
+    }
+    const checkRule = /^(?:(?:\+|00)86)?1\d{10}$/
+    if (!checkRule.test(value)) {
+        return Promise.reject('您输入的手机号不合法');
+    } else {
+        return Promise.resolve();
+    }
+};
+
+// @ts-ignore
+const rules: Record<string, Rule[]> = reactive({
+    userName: [{required: true, validator: validateUserName, trigger: 'change'}],
+    userAccount: [{required: true, validator: validateUserAccount, trigger: 'change'}],
+});
+
+const layout = {
+    labelCol: {span: 4},
+    wrapperCol: {span: 18},
+};
+
+const handleCancel = () => {
+    emit('onCancel')
+}
+const handleOk = () => {
+    formRef.value?.validateFields().then(async () => {
+        const res = await updateUser(formState as UserModel.UserUpdateDto)
+        if (res.code === 200) {
+            formRef.value?.resetFields();
+            notification.success({
+                message: 'Success',
+                description: '更新成功'
+            });
+            emit('onOk')
+        } else {
+            message.error(res.message || '更新失败')
+        }
+    }).catch(error => {
+        console.error('error', error)
+        message.error('表单输入不完整')
+    })
+}
+const handleResetForm = () => {
+    formRef.value?.resetFields();
+};
+</script>
+
+<template>
+    <a-modal v-model:visible="dialogVisible" title="用户更新" @cancel="handleCancel">
+        <a-form ref="formRef" :model="formState" :rules="rules" v-bind="layout">
+            <a-form-item has-feedback label="昵称" name="userName">
+                <a-input v-model:value="formState.name" type="text" autocomplete="off"/>
+            </a-form-item>
+            <a-form-item has-feedback label="手机号" name="userAccount">
+                <a-input v-model:value="formState.avatar" type="text" autocomplete="off"/>
+            </a-form-item>
+        </a-form>
+        <template #footer>
+            <section class="flex justify-end">
+                <a-button size="small" @click="() => {dialogVisible=false; handleCancel()}">取消</a-button>
+                <a-button type="primary" size="small" @click="handleOk">更新</a-button>
+            </section>
+        </template>
+    </a-modal>
+</template>
+
+
+<style lang="scss" scoped>
+
+</style>
